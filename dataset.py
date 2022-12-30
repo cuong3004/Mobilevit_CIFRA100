@@ -10,21 +10,6 @@ def load_imagenet(tfrec_paths):
     options_no_order.experimental_deterministic = False
     dataset = dataset.with_options(options_no_order)
     
-    def deserialization_fn(serialized_example):
-        parsed_example = tf.io.parse_single_example(
-            serialized_example,
-            features={
-                'image/encoded': tf.io.FixedLenFeature([], tf.string),
-                'image/class/label': tf.io.FixedLenFeature([], tf.int64),
-            }
-        )
-        image = tf.image.decode_jpeg(parsed_example['image/encoded'], channels=3)
-        # image = tf.image.resize(image, image_shape)
-        label = tf.cast(parsed_example['image/class/label'], tf.int64) - 1  # [0-999]
-        return image, label
-
-    dataset.map(deserialization_fn)
-    
     return dataset
 
 def load_cifar(data_dir, is_training=True):
@@ -52,8 +37,6 @@ def get_dataset(tfrec_paths, batch_size, dtype, image_size=(224,224), is_trainin
         image = tf.image.resize(image, (image_size))
         image = bt_augmentor(image)
 
-        
-
         image = tf.cast(image, dtype)
         image /= 255.0
         return image, label
@@ -64,14 +47,34 @@ def get_dataset(tfrec_paths, batch_size, dtype, image_size=(224,224), is_trainin
         image /= 255.0
         return image, label
 
+    def deserialization_fn(serialized_example):
+        parsed_example = tf.io.parse_single_example(
+            serialized_example,
+            features={
+                'image/encoded': tf.io.FixedLenFeature([], tf.string),
+                'image/class/label': tf.io.FixedLenFeature([], tf.int64),
+            }
+        )
+        image = tf.image.decode_jpeg(parsed_example['image/encoded'], channels=3)
+        if is_training:
+            print("Is train")
+            image = process(image)
+        else:
+            image = process_valid(image)
+        # image = tf.image.resize(image, image_shape)
+        label = tf.cast(parsed_example['image/class/label'], tf.int64) - 1  # [0-999]
+        return image, label
+
+    
 #   dataset = dataset.map(scale)
     AUTO = tf.data.experimental.AUTOTUNE
+    dataset.map(deserialization_fn, num_parallel_calls=AUTO)
 
-    if is_training:
-        print("Is train")
-        dataset = dataset.map(process, num_parallel_calls=AUTO)
-    else:
-        dataset = dataset.map(process_valid, num_parallel_calls=AUTO)
+    # if is_training:
+    #     print("Is train")
+    #     dataset = dataset.map(process, num_parallel_calls=AUTO)
+    # else:
+    #     dataset = dataset.map(process_valid, num_parallel_calls=AUTO)
 
     dataset = dataset.cache()
     dataset = dataset.repeat()
