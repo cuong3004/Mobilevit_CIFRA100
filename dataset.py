@@ -1,27 +1,48 @@
 import tensorflow_datasets as tfds
 import tensorflow as tf
+from transform import RandomAugmentor
 
-def get_dataset(batch_size, is_training=True):
-  split = 'train' if is_training else 'test'
-  dataset, info = tfds.load(name='mnist', split=split, with_info=True,
-                            as_supervised=True, try_gcs=True)
+def get_dataset(batch_size, dtype, image_size=(224,224), is_training=True):
+    split = 'train' if is_training else 'test'
+    dataset, info = tfds.load(name='cifar100', data_dir="gs://cuong_tpu/data", split=split, with_info=True,
+                                as_supervised=True, try_gcs=True)
 
-  # Normalize the input data.
-  def scale(image, label):
-    image = tf.cast(image, tf.float32)
-    image /= 255.0
-    return image, label
+    # Normalize the input data.
 
-  dataset = dataset.map(scale)
+    bt_augmentor = RandomAugmentor(image_size[0])
 
-  # Only shuffle and repeat the dataset in training. The advantage of having an
-  # infinite dataset for training is to avoid the potential last partial batch
-  # in each epoch, so that you don't need to think about scaling the gradients
-  # based on the actual batch size.
-  if is_training:
-    dataset = dataset.shuffle(10000)
+    def process(image, label):
+        # image = tf.image.resize_and_crop_image(
+        #     image, target_size=image_size)
+        image = tf.image.resize(image, (image_size))
+        image = bt_augmentor(image)
+
+        
+
+        image = tf.cast(image, dtype)
+        image /= 255.0
+        return image, label
+
+    def process_valid(image, label):
+        image = tf.image.resize(image, (image_size))
+        image = tf.cast(image, dtype)
+        image /= 255.0
+        return image, label
+
+#   dataset = dataset.map(scale)
+    AUTO = tf.data.experimental.AUTOTUNE
+
+    if is_training:
+        print("Is train")
+        dataset = dataset.map(process, num_parallel_calls=AUTO)
+    else:
+        dataset = dataset.map(process_valid, num_parallel_calls=AUTO)
+
+    dataset = dataset.cache()
     dataset = dataset.repeat()
+    dataset = dataset.shuffle(4096)
 
-  dataset = dataset.batch(batch_size)
+    dataset = dataset.batch(batch_size)
+    dataset = dataset.prefetch(AUTO)
 
-  return dataset
+    return dataset

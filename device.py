@@ -47,3 +47,5 @@ def build_strategy(MIXED_PRECISION=True, XLA_ACCELERATE=False):
         print('TF System CudNN V. : ', tf.sysconfig.get_build_info()["cudnn_version"])
     except:
         pass
+    
+    return strategy, dtype_model
