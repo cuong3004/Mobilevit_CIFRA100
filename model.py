@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 def build_model(num_classes=100,):
-    backbone = tf.keras.applications.MobileNetV2(
+    backbone = tf.keras.applications.ResNet101V2(
         input_shape=(224,224,3),
         weights="imagenet",
         # weights=None,
