@@ -1,86 +1,134 @@
-import tensorflow_datasets as tfds
+from device import build_strategy
+from model import build_model
+from dataset import get_dataset
+
 import tensorflow as tf
-from transform import RandomAugmentor
 
-def load_imagenet(tfrec_paths):
-    AUTO = tf.data.experimental.AUTOTUNE
-    dataset = tf.data.TFRecordDataset(tfrec_paths, num_parallel_reads=AUTO)
+
+
+
+
+
+
+
+def main():
     
-    options_no_order = tf.data.Options()
-    options_no_order.experimental_deterministic = False
-    dataset = dataset.with_options(options_no_order)
+    strategy, dtype = build_strategy()
     
-    return dataset
-
-def load_cifar(data_dir, is_training=True):
-    split = 'train' if is_training else 'test'
-    dataset, info = tfds.load(name='cifar100', data_dir=data_dir, split=split, with_info=True,
-                                as_supervised=True, try_gcs=True)
-
-def get_dataset(tfrec_paths, batch_size, dtype, image_size=(224,224), is_training=True):
-    
-
-    
-    # load_cifar(data_dir, is_training)
-    
-
-
-    # Normalize the input data.
-    dataset = load_imagenet(tfrec_paths)
-
-    bt_augmentor = RandomAugmentor(image_size[0])
-
-    def process(image, label):
-        # image = tf.image.resize_and_crop_image(
-        #     image, target_size=image_size)
+    with strategy.scope():
+        model = build_model()
+        optimizer = tf.keras.optimizers.SGD(0.0001)
+        loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True,
+                        reduction=tf.keras.losses.Reduction.NONE)
         
-        image = tf.image.resize(image, (image_size))
-        image = bt_augmentor(image)
+        tracking_loss = tf.keras.metrics.Mean('loss', dtype=tf.float32)
+        tracking_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(
+                    'accuracy', dtype=tf.float32)
 
-        image = tf.cast(image, dtype)
-        image /= 255.0
-        return image, label
+        # model.compile(optimizer='sgd',
+        #                 loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        #                 metrics=['sparse_categorical_accuracy'])
+    
+    PATH_1 = 'gs://kds-af3ee8c8c3b466fbe7173338006beb4b1548917f9f1b7af696b2a57d'
+    PATH_2 = 'gs://kds-545b5300b5e2cdaae853bb7ff6a1fe41a16558a616fd578127034472'
+    
+    train_shard_suffix = 'train-*-of-01024'
+    val_shard_suffix = 'validation-*-of-00128'
+    
+    train_set_path = tf.io.gfile.glob(PATH_1 + f'/train/{train_shard_suffix}')
+    train_set_path += tf.io.gfile.glob(PATH_2 + f'/{train_shard_suffix}')
+    val_set_path = tf.io.gfile.glob(PATH_1 + f'/validation/{val_shard_suffix}')
+    
+    train_set_path = sorted(train_set_path)
+    val_set_path = sorted(val_set_path)
+    
+    relicate = 8
+    per_replica_batch_size = 64 
+    batch_size = per_replica_batch_size * relicate
+    train_set_len = 626000 + 655167# for part 0 and for part 1: 655167
+    valid_set_len = 50000
+    steps_per_epoch = -(-train_set_len // batch_size)
+    validation_steps = -(-valid_set_len // batch_size)
 
-    def process_valid(image, label):
-        image = tf.image.resize(image, (image_size))
-        image = tf.cast(image, dtype)
-        image /= 255.0
-        return image, label
-
-    def deserialization_fn(serialized_example):
-        parsed_example = tf.io.parse_single_example(
-            serialized_example,
-            features={
-                'image/encoded': tf.io.FixedLenFeature([], tf.string),
-                'image/class/label': tf.io.FixedLenFeature([], tf.int64),
-            }
-        )
-        image = tf.image.decode_jpeg(parsed_example['image/encoded'], channels=3)
-        if is_training:
-            print("Is train")
-            image = process(image)
-        else:
-            image = process_valid(image)
-        # image = tf.image.resize(image, image_shape)
-        label = tf.cast(parsed_example['image/class/label'], tf.int64) - 1  # [0-999]
-        return image, label
+    train_dataset = get_dataset(train_set_path, batch_size, dtype, is_training=True)
+    for batch in iter(train_dataset):
+        # print(batch)
+        x, y = batch 
+        print(x.shape)
+        break
+    test_dataset = get_dataset(val_set_path, batch_size, dtype, is_training=False)
+    for batch in iter(test_dataset):
+        x, y = batch 
+        print(x.shape)
+        break
+    
+    train_dataset = strategy.distribute_datasets_from_function(
+        lambda _: get_dataset(train_set_path, per_replica_batch_size, dtype, is_training=True))
+    test_dataset = strategy.distribute_datasets_from_function(
+        lambda _: get_dataset(val_set_path, per_replica_batch_size, dtype, is_training=False))
+    
+    train_iterator = iter(train_dataset)
+    test_iterator = iter(test_dataset)
 
     
-#   dataset = dataset.map(scale)
-    AUTO = tf.data.experimental.AUTOTUNE
-    dataset.map(deserialization_fn, num_parallel_calls=AUTO)
+    
+    @tf.function
+    def train_step(iterator):
+        """The step function for one training step."""
 
-    # if is_training:
-    #     print("Is train")
-    #     dataset = dataset.map(process, num_parallel_calls=AUTO)
-    # else:
-    #     dataset = dataset.map(process_valid, num_parallel_calls=AUTO)
+        def step_fn(inputs):
+            """The computation to run on each TPU device."""
+            images, labels = inputs
+            with tf.GradientTape() as tape:
+                logits = model(images, training=True)
+                loss = loss_fn(labels, logits)
 
-    dataset = dataset.cache()
-    dataset = dataset.repeat()
-    dataset = dataset.shuffle(4096)
+                grads = tape.gradient(loss, model.trainable_variables)
+                optimizer.apply_gradients(list(zip(grads, model.trainable_variables)))
+                tracking_loss.update_state(loss * strategy.num_replicas_in_sync)
+                tracking_accuracy.update_state(labels, logits)
 
-    dataset = dataset.batch(batch_size)
-    dataset = dataset.prefetch(AUTO)
+        strategy.run(step_fn, args=(next(iterator),))
+        
+    @tf.function
+    def test_step(iterator):
+        """The step function for one training step."""
 
-    return dataset
+        def step_fn(inputs):
+            """The computation to run on each TPU device."""
+            images, labels = inputs
+            logits = model(images, training=False)
+            loss = loss_fn(labels, logits)
+
+            # grads = tape.gradient(loss, model.trainable_variables)
+            # optimizer.apply_gradients(list(zip(grads, model.trainable_variables)))
+            tracking_loss.update_state(loss * strategy.num_replicas_in_sync)
+            tracking_accuracy.update_state(labels, logits)
+
+        strategy.run(step_fn, args=(next(iterator),))
+        
+    EPOCH = 200
+    for epoch in range(EPOCH):
+        print('Epoch: {}/{}'.format(epoch, EPOCH))
+
+        for step in range(steps_per_epoch):
+            train_step(train_iterator)
+        print('Current step: {}, training loss: {}, accuracy: {}%'.format(
+            optimizer.iterations.numpy(),
+            round(float(tracking_loss.result()), 4),
+            round(float(tracking_accuracy.result()) * 100, 4)))
+        tracking_loss.reset_states()
+        tracking_accuracy.reset_states()
+        
+        for step in range(validation_steps):
+            test_step(test_iterator)
+        print('Current step: {}, validation loss: {}, accuracy: {}%'.format(
+            optimizer.iterations.numpy(),
+            round(float(tracking_loss.result()), 4),
+            round(float(tracking_accuracy.result()) * 100, 4)))
+        tracking_loss.reset_states()
+        tracking_accuracy.reset_states()
+        
+
+if __name__ == "__main__":
+    main()

@@ -37,7 +37,7 @@ def main():
     
     train_set_path = tf.io.gfile.glob(PATH_1 + f'/train/{train_shard_suffix}')
     train_set_path += tf.io.gfile.glob(PATH_2 + f'/{train_shard_suffix}')
-    val_set_path = tf.io.gfile.glob(PATH_2 + f'/validation/{val_shard_suffix}')
+    val_set_path = tf.io.gfile.glob(PATH_1 + f'/validation/{val_shard_suffix}')
     
     train_set_path = sorted(train_set_path)
     val_set_path = sorted(val_set_path)
@@ -52,6 +52,7 @@ def main():
 
     train_dataset = get_dataset(train_set_path, batch_size, dtype, is_training=True)
     for batch in iter(train_dataset):
+        # print(batch)
         x, y = batch 
         print(x.shape)
         break
@@ -62,9 +63,9 @@ def main():
         break
     
     train_dataset = strategy.distribute_datasets_from_function(
-        lambda _: get_dataset(per_replica_batch_size, dtype, is_training=True))
+        lambda _: get_dataset(train_set_path, per_replica_batch_size, dtype, is_training=True))
     test_dataset = strategy.distribute_datasets_from_function(
-        lambda _: get_dataset(per_replica_batch_size, dtype, is_training=False))
+        lambda _: get_dataset(val_set_path, per_replica_batch_size, dtype, is_training=False))
     
     train_iterator = iter(train_dataset)
     test_iterator = iter(test_dataset)
