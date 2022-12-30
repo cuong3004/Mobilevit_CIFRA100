@@ -6,6 +6,10 @@ def load_imagenet(tfrec_paths):
     AUTO = tf.data.experimental.AUTOTUNE
     dataset = tf.data.TFRecordDataset(tfrec_paths, num_parallel_reads=AUTO)
     
+    options_no_order = tf.data.Options()
+    options_no_order.experimental_deterministic = False
+    dataset = dataset.with_options(options_no_order)
+    
     def deserialization_fn(serialized_example):
         parsed_example = tf.io.parse_single_example(
             serialized_example,
@@ -20,6 +24,7 @@ def load_imagenet(tfrec_paths):
         return image, label
 
     dataset.map(deserialization_fn)
+    
     return dataset
 
 def load_cifar(data_dir, is_training=True):
