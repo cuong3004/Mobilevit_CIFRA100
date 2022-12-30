@@ -27,9 +27,9 @@ class RandomColorJitter(Augmentation):
     def call(self, x: tf.Tensor) -> tf.Tensor:
         if self.random_execute(0.8):
             x = tf.image.random_brightness(x, 0.8)
-            x = tf.image.random_contrast(x, 0.2, 0.8)
+            x = tf.image.random_contrast(x, 0.4, 0.9)
             x = tf.image.random_saturation(x, 0.4, 1.6)
-            x = tf.image.random_hue(x, 0.2)
+            x = tf.image.random_hue(x, 0.4)
         return x
 
 class RandomFlip(Augmentation):
@@ -138,7 +138,7 @@ class RandomRotage(Augmentation):
         self.image_size = image_size
     @tf.function
     def call(self, x: tf.Tensor) -> tf.Tensor:
-        if self.random_execute(1.0):
+        if self.random_execute(0.6):
             x = transform(x, self.image_size)
         return x
 
