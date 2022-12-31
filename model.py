@@ -8,7 +8,7 @@ def build_model(num_classes=1000,):
     )
 
     x = backbone.layers[-2].output
-    x = tf.keras.layers.Dense(num_classes)(x)
+    x = tf.keras.layers.Dense(num_classes, activate='softmax', dtype='float32')(x)
 
     return tf.keras.Model(backbone.input, x)
 

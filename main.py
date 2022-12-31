@@ -78,7 +78,7 @@ lr_schedule = build_lr_schedule(
 lr_callback = tf.keras.callbacks.LearningRateScheduler(
     lr_schedule, verbose=True)
 
-tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir="./logs")
+tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir="gs://cuong_tpu/log_mobilevit")
 
 cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath='/tmp/checkpoints/model.hdf5',
                             #  monitor='loss',
@@ -120,7 +120,7 @@ model.fit(
         validation_freq=3,
         validation_data=test_dataset,
         validation_steps=validation_steps,
-        callbacks=[lr_callback, cp_callback, tensorboard_callback]
+        callbacks=[lr_callback, tensorboard_callback]
     )
 
 
