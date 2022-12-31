@@ -1,11 +1,31 @@
 from device import build_strategy
 from model import build_model
 from dataset import get_dataset
-
+import wandb
 import tensorflow as tf
+from wandb import WandbMetricsLogger
+
+run = wandb.init(project="test_imagenet_tpu_v2", name="MobilevitSE")
 
 
-
+def build_lr_schedule(
+        lr_max: float,
+        lr_warmup_epochs: int,
+        lr_sustain_epochs: int,
+        lr_decay: float,
+    ):
+    def get_lr(epoch: int):
+        lr_min = lr_start = lr_max / 100
+        if epoch < lr_warmup_epochs:
+            lr = (lr_max - lr_start) / lr_warmup_epochs * epoch + lr_start
+        elif epoch < lr_warmup_epochs + lr_sustain_epochs:
+            lr = lr_max
+        else:
+            lr = ((lr_max - lr_min) *
+                   lr_decay ** (epoch - lr_warmup_epochs - lr_sustain_epochs) +
+                   lr_min)
+        return lr
+    return get_lr
 
 
 
@@ -14,22 +34,6 @@ import tensorflow as tf
 # def main():
     
 strategy, dtype = build_strategy()
-
-with strategy.scope():
-    model = build_model()
-    optimizer = tf.keras.optimizers.SGD(0.00001)
-    # loss_fn = tf.keras.losses.sparse_categorical_crossentropy
-    
-    loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True,
-                    reduction=tf.keras.losses.Reduction.NONE)
-    
-    tracking_loss = tf.keras.metrics.Mean('loss')
-    tracking_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(
-                'accuracy')
-
-    # model.compile(optimizer='sgd',
-    #                 loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    #                 metrics=['sparse_categorical_accuracy'])
 
 PATH_1 = 'gs://kds-af3ee8c8c3b466fbe7173338006beb4b1548917f9f1b7af696b2a57d'
 PATH_2 = 'gs://kds-545b5300b5e2cdaae853bb7ff6a1fe41a16558a616fd578127034472'
@@ -64,6 +68,61 @@ for batch in iter(test_dataset):
     x, y = batch 
     print(x.shape)
     break
+
+lr_schedule = build_lr_schedule(
+        lr_max=5e-2,
+        lr_warmup_epochs=5,
+        lr_sustain_epochs=20,
+        lr_decay=0.9,
+    )
+lr_callback = tf.keras.callbacks.LearningRateScheduler(
+    lr_schedule, verbose=True)
+
+cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath='/tmp/checkpoints/model.hdf5',
+                            #  monitor='loss',
+                             save_freq='epoch',
+                             verbose=1,
+                             period=3,
+                             verbose=True,
+                             # save_best_only=True,
+                             save_weights_only=True,
+                             )
+wandb_callback = WandbMetricsLogger()
+
+with strategy.scope():
+    model = build_model()
+    optimizer = tf.keras.optimizers.SGD()
+    # loss_fn = tf.keras.losses.sparse_categorical_crossentropy
+    
+    loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True,
+                    reduction=tf.keras.losses.Reduction.NONE)
+    
+    tracking_loss = tf.keras.metrics.Mean('loss')
+    tracking_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(
+                'accuracy')
+    
+
+
+    
+
+
+    # model.compile(optimizer='sgd',
+    #                 loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    #                 metrics=['sparse_categorical_accuracy'])
+
+model.fit(
+        train_dataset,
+        steps_per_epoch=steps_per_epoch,
+        epochs=200,
+        # callbacks=callbacks,
+        validation_freq=3,
+        validation_data=test_dataset,
+        validation_steps=validation_steps,
+        callbacks=[lr_callback, cp_callback, wandb_callback]
+    )
+
+
+assert False
 
 train_dataset = strategy.distribute_datasets_from_function(
     lambda _: get_dataset(train_set_path, per_replica_batch_size, dtype, is_training=True))
