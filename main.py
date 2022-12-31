@@ -5,7 +5,7 @@ import wandb
 import tensorflow as tf
 from wandb.keras import WandbMetricsLogger
 
-run = wandb.init(project="test_imagenet_tpu_v2", name="MobilevitSE")
+# run = wandb.init(project="test_imagenet_tpu_v2", name="MobilevitSE")
 
 
 def build_lr_schedule(
@@ -49,7 +49,7 @@ train_set_path = sorted(train_set_path)
 val_set_path = sorted(val_set_path)
 
 relicate = 8
-per_replica_batch_size = 64 
+per_replica_batch_size = 256 
 batch_size = per_replica_batch_size * relicate
 train_set_len = 626000 + 655167# for part 0 and for part 1: 655167
 valid_set_len = 50000
@@ -78,6 +78,8 @@ lr_schedule = build_lr_schedule(
 lr_callback = tf.keras.callbacks.LearningRateScheduler(
     lr_schedule, verbose=True)
 
+tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir="./logs")
+
 cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath='/tmp/checkpoints/model.hdf5',
                             #  monitor='loss',
                              save_freq='epoch',
@@ -87,7 +89,7 @@ cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath='/tmp/checkpoints/mode
                              # save_best_only=True,
                              save_weights_only=True,
                              )
-wandb_callback = WandbMetricsLogger()
+# wandb_callback = WandbMetricsLogger()
 from mobilevit import create_mobilevit
 with strategy.scope():
     model = create_mobilevit()
@@ -118,7 +120,7 @@ model.fit(
         validation_freq=3,
         validation_data=test_dataset,
         validation_steps=validation_steps,
-        callbacks=[lr_callback, cp_callback, wandb_callback]
+        callbacks=[lr_callback, cp_callback, tensorboard_callback]
     )
 
 
