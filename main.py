@@ -83,7 +83,7 @@ cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath='/tmp/checkpoints/mode
                              save_freq='epoch',
                              verbose=1,
                              period=3,
-                             verbose=True,
+                            #  verbose=True,
                              # save_best_only=True,
                              save_weights_only=True,
                              )
