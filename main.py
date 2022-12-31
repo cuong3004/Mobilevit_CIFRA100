@@ -109,26 +109,39 @@ def test_step(iterator):
         tracking_accuracy.update_state(labels, logits)
 
     strategy.run(step_fn, args=(next(iterator),))
-    
+
 EPOCH = 200
 import time 
 time1 = time.time()
+
+# for step in range(5): #steps_per_epoch
+#     train_step(train_iterator)
+# print("Loss:",tracking_loss.result())
+# tracking_loss.reset_states()
+
 for epoch in range(EPOCH):
     print('Epoch: {}/{}'.format(epoch, EPOCH))
 
-    for step in range(steps_per_epoch): #steps_per_epoch
+    # for _ in range(100)
+    for step in range(1,steps_per_epoch+1): #steps_per_epoch
         train_step(train_iterator)
-    print('Current step: {}, training loss: {}, accuracy: {}%'.format(
-        optimizer.iterations.numpy(),
-        round(float(tracking_loss.result()), 4),
-        round(float(tracking_accuracy.result()) * 100, 4)))
-    tracking_loss.reset_states()
-    tracking_accuracy.reset_states()
+        if step % 100 == 0:
+            
+            print('Current step: {}, training loss: {}, accuracy: {}%'.format(
+                optimizer.iterations.numpy(),
+                round(float(tracking_loss.result()), 4),
+                round(float(tracking_accuracy.result()) * 100, 4)))
+            tracking_loss.reset_states()
+            tracking_accuracy.reset_states()
+    # tracking_loss.reset_states()
+    # tracking_accuracy.reset_states()
+    # print("Loss:",tracking_loss.result())
+    # tracking_loss.reset_states()
     
     for step in range(validation_steps): #validation_steps
         test_step(test_iterator)
     print('Current step: {}, validation loss: {}, accuracy: {}%'.format(
-        optimizer.iterations.numpy(),
+        epoch,
         round(float(tracking_loss.result()), 4),
         round(float(tracking_accuracy.result()) * 100, 4)))
     tracking_loss.reset_states()
@@ -138,6 +151,5 @@ for epoch in range(EPOCH):
     print("time_running:", time_running)
     time1 = time.time()
         
-
 # if __name__ == "__main__":
 #     main()

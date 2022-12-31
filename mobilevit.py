@@ -6,6 +6,11 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
+try:
+    from tensorflow.keras.layers import EinsumDense
+except:
+    from tensorflow.keras.layers.experimental import EinsumDense
+
 
 # Values are from table 4.
 patch_size = 4  # 2x2, for the Transformer blocks.
@@ -13,45 +18,64 @@ image_size = 256
 expansion_factor = 4  # expansion factor for the MobileNetV2 blocks.
 
 import math
-class MyMultiHeadAttention(layers.MultiHeadAttention):
+class MyMultiHeadAttention(layers.Layer):
     def __init__(self,
                num_heads,
                key_dim,
-               value_dim=None,
                dropout=0.0,
-               use_bias=True,
-               output_shape=None,
-               attention_axes=None,
-               kernel_initializer="glorot_uniform",
-               bias_initializer="zeros",
-               kernel_regularizer=None,
-               bias_regularizer=None,
-               activity_regularizer=None,
-               kernel_constraint=None,
-               bias_constraint=None,
                **kwargs):
-        super(MyMultiHeadAttention, self).__init__(num_heads,
-                                            key_dim,
-                                            value_dim=None,
-                                            dropout=0.0,
-                                            use_bias=True,
-                                            output_shape=None,
-                                            attention_axes=None,
-                                            kernel_initializer="glorot_uniform",
-                                            bias_initializer="zeros",
-                                            kernel_regularizer=None,
-                                            bias_regularizer=None,
-                                            activity_regularizer=None,
-                                            kernel_constraint=None,
-                                            bias_constraint=None,
-                                            **kwargs)
+        super(MyMultiHeadAttention, self).__init__(**kwargs)
+        
+        self._key_dim = key_dim
+        self._num_heads = num_heads
+        self._dropout = dropout
+        
+    def build(self, input_shape):
+
+        self._query_dense = EinsumDense(
+            'abcd,def->abcef',
+            output_shape=[None,None,self._num_heads,self._key_dim],
+            bias_axes='ef',
+            name="query",
+        )
+        
+        self._key_dense = EinsumDense(
+            'abcd,def->abcef',
+            output_shape=[None,None,self._num_heads,self._key_dim],
+            bias_axes='ef',
+            name="key",
+        )
+        
+        self._value_dense = EinsumDense(
+            'abcd,def->abcef',
+            output_shape=[None,None,self._num_heads,self._key_dim],
+            bias_axes='ef',
+            name="value",
+        )
+        
+        self._output_dense = EinsumDense(
+            'abcde,def->abcf',
+            output_shape=[None,None,self._key_dim],
+            bias_axes='f',
+            name="attention_output",
+        )
+        
+        self._dropout_layer = layers.Dropout(self._dropout)
+    
+    def get_config(self):
+        config = {
+            '_key_dim': self._key_dim,
+            '_num_heads': self._num_heads,
+            '_dropout': self._dropout,
+        }
+        base_config = super(MyMultiHeadAttention, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
         
     def _compute_attention(self,
                          query,
                          key,
                          value,
-                         attention_mask=None,
-                         training=None):
+                         training,):
         
         query = tf.multiply(query, 1.0 / math.sqrt(float(self._key_dim)))
 
@@ -63,7 +87,7 @@ class MyMultiHeadAttention(layers.MultiHeadAttention):
         attention_scores = tf.nn.softmax(attention_scores, axis=-1)
 
         attention_scores_dropout = self._dropout_layer(
-            attention_scores, training=training)
+            attention_scores,training=training)
         
         
         attention_output = tf.matmul(attention_scores_dropout, value)
@@ -71,6 +95,20 @@ class MyMultiHeadAttention(layers.MultiHeadAttention):
         attention_output = tf.keras.layers.Permute([2,3,1,4])(query)
         
         return attention_output, attention_scores
+    
+    def call(self, inputs, training=None):
+        query = self._query_dense(inputs)
+        key = self._key_dense(inputs)
+        value = self._value_dense(inputs)
+        
+        attention_output, attention_scores = self._compute_attention(
+            query, key, value, training
+        )
+        
+        attention_output = self._output_dense(attention_output)
+
+        
+        return attention_output
 
 
 
@@ -298,4 +336,4 @@ def create_mobilevit(num_classes=1000):
 if __name__ == '__main__':
     print("MODEL")
     # main()
-    create_mobilevit()
+    create_mobilevit().summary()
