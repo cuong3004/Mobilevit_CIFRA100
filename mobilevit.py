@@ -60,7 +60,7 @@ class MyMultiHeadAttention(layers.Layer):
             name="attention_output",
         )
         
-        self._dropout_layer = layers.Dropout(self._dropout)
+        self._dropout_layer = layers.Dropout(rate=self._dropout)
     
     def get_config(self):
         config = {
@@ -85,7 +85,7 @@ class MyMultiHeadAttention(layers.Layer):
         
         attention_scores = tf.matmul(query, key)
         attention_scores = tf.nn.softmax(attention_scores, axis=-1)
-
+        # print(attention_scores.shape)
         attention_scores_dropout = self._dropout_layer(
             attention_scores,training=training)
         
@@ -104,6 +104,8 @@ class MyMultiHeadAttention(layers.Layer):
         attention_output, attention_scores = self._compute_attention(
             query, key, value, training
         )
+        
+        
         
         attention_output = self._output_dense(attention_output)
 
@@ -209,7 +211,7 @@ def transformer_block(x, transformer_layers, projection_dim, num_heads=2):
         # Create a multi-head attention layer.
         attention_output = MyMultiHeadAttention(
             num_heads=num_heads, key_dim=projection_dim, dropout=0.1
-        )(x1, x1)
+        )(x1)
         # Skip connection 1.
         x2 = layers.Add()([attention_output, x])
         # Layer normalization 2.
@@ -336,4 +338,8 @@ def create_mobilevit(num_classes=1000):
 if __name__ == '__main__':
     print("MODEL")
     # main()
-    create_mobilevit().summary()
+    model = create_mobilevit()
+    model.summary()
+    
+    model(tf.ones((2,256,256,3), dtype=tf.bfloat16))
+    
