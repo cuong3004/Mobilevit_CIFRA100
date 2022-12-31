@@ -3,7 +3,7 @@ from model import build_model
 from dataset import get_dataset
 import wandb
 import tensorflow as tf
-from wandb import WandbMetricsLogger
+from wandb.keras import WandbMetricsLogger
 
 run = wandb.init(project="test_imagenet_tpu_v2", name="MobilevitSE")
 
