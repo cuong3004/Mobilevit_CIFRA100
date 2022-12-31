@@ -91,24 +91,24 @@ wandb_callback = WandbMetricsLogger()
 from mobilevit import create_mobilevit
 with strategy.scope():
     model = create_mobilevit()
-    optimizer = tf.keras.optimizers.SGD()
-    # loss_fn = tf.keras.losses.sparse_categorical_crossentropy
+    # optimizer = tf.keras.optimizers.SGD()
+    # # loss_fn = tf.keras.losses.sparse_categorical_crossentropy
     
-    loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True,
-                    reduction=tf.keras.losses.Reduction.NONE)
+    # loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True,
+    #                 reduction=tf.keras.losses.Reduction.NONE)
     
-    tracking_loss = tf.keras.metrics.Mean('loss')
-    tracking_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(
-                'accuracy')
-    
-
-
+    # tracking_loss = tf.keras.metrics.Mean('loss')
+    # tracking_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(
+    #             'accuracy')
     
 
 
-    # model.compile(optimizer='sgd',
-    #                 loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    #                 metrics=['sparse_categorical_accuracy'])
+    
+
+
+model.compile(optimizer='sgd',
+                loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+                metrics=['sparse_categorical_accuracy'])
 
 model.fit(
         train_dataset,
