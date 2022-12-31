@@ -49,7 +49,7 @@ train_set_path = sorted(train_set_path)
 val_set_path = sorted(val_set_path)
 
 relicate = 8
-per_replica_batch_size = 256 
+per_replica_batch_size = 512 
 batch_size = per_replica_batch_size * relicate
 train_set_len = 626000 + 655167# for part 0 and for part 1: 655167
 valid_set_len = 50000
@@ -114,10 +114,10 @@ model.compile(optimizer='sgd',
 
 model.fit(
         train_dataset,
-        steps_per_epoch=steps_per_epoch,
+        steps_per_epoch=200, #steps_per_epoch
         epochs=200,
         # callbacks=callbacks,
-        validation_freq=3,
+        validation_freq=6,
         validation_data=test_dataset,
         validation_steps=validation_steps,
         callbacks=[lr_callback, tensorboard_callback]

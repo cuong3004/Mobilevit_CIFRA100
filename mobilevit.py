@@ -330,7 +330,7 @@ def create_mobilevit(num_classes=1000):
 
     # Classification head.
     x = layers.GlobalAvgPool2D()(x)
-    outputs = layers.Dense(num_classes,activation='softmax', dtype='float32')(x)
+    outputs = layers.Dense(num_classes)(x)
 
     return keras.Model(inputs, outputs)
 
