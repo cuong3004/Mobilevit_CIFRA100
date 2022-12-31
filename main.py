@@ -56,14 +56,14 @@ valid_set_len = 50000
 steps_per_epoch = -(-train_set_len // batch_size)
 validation_steps = -(-valid_set_len // batch_size)
 
-train_dataset = get_dataset(train_set_path, batch_size, dtype, is_training=True)
+train_dataset = get_dataset(train_set_path, batch_size, dtype, image_size=(256,256), is_training=True)
 for batch in iter(train_dataset):
     # print(batch)
     x, y = batch 
     print(x.shape)
     print(tf.math.reduce_min(x), tf.math.reduce_max(x))
     break
-test_dataset = get_dataset(val_set_path, batch_size, dtype, is_training=False)
+test_dataset = get_dataset(val_set_path, batch_size, dtype, image_size=(256,256), is_training=False)
 for batch in iter(test_dataset):
     x, y = batch 
     print(x.shape)
