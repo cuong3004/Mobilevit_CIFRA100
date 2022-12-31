@@ -92,7 +92,7 @@ class MyMultiHeadAttention(layers.Layer):
         
         attention_output = tf.matmul(attention_scores_dropout, value)
         
-        attention_output = tf.keras.layers.Permute([2,3,1,4])(query)
+        attention_output = tf.keras.layers.Permute([2,3,1,4])(attention_output)
         
         return attention_output, attention_scores
     
