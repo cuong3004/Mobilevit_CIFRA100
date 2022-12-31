@@ -88,9 +88,9 @@ cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath='/tmp/checkpoints/mode
                              save_weights_only=True,
                              )
 wandb_callback = WandbMetricsLogger()
-
+from mobilevit import create_mobilevit
 with strategy.scope():
-    model = build_model()
+    model = create_mobilevit()
     optimizer = tf.keras.optimizers.SGD()
     # loss_fn = tf.keras.losses.sparse_categorical_crossentropy
     
